@@ -1,10 +1,10 @@
 # coding: utf-8
 
 import uuid
+import streamlit as st
 from pandasai import Agent
 from pandasai.schemas.df_config import Config
-from pandasai.llm.openai import OpenAI
-import streamlit as st
+from pandasai.llm import DeepSeek  # 直接使用 DeepSeek 类
 
 
 class LLMAgentHandler:
@@ -15,54 +15,90 @@ class LLMAgentHandler:
         self.llm_agent = None
         self.agent_id = str(uuid.uuid4())
 
-    def _create_deepseek_client(self, api_key, base_url):
-        # 添加DeepSeek模型支持
-        OpenAI._supported_chat_models.append('deepseek-chat')
-        return OpenAI(
-            api_token=api_key,
-            api_base=base_url,
-            model='deepseek-chat'
-        )
-
     def _setup_llm(self):
-        selected_model = st.session_state.last_model_choice
-        llm_instance = None
+        """设置 DeepSeek LLM"""
+        # 优先从 session_state 获取（用户手动输入）
+        api_key = st.session_state.get("api_key", "")
+        base_url = st.session_state.get("model_base_url", "")
         
-        if selected_model == "DeepSeek":
-            if st.session_state.api_key != "":
-                llm_instance = self._create_deepseek_client(
-                    st.session_state.api_key,
-                    st.session_state.model_base_url
-                )
+        # 如果 session_state 中没有，则从 secrets 获取
+        if not api_key:
+            api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+        if not base_url:
+            base_url = st.secrets.get("DEEPSEEK_API_BASE", "https://api.deepseek.com")
         
-        if llm_instance is None:
-            st.toast("语言模型初始化失败，请检查配置参数", icon="⚠️")
-        return llm_instance
+        # 验证 API 密钥
+        if not api_key:
+            st.toast("请配置 API 密钥（在侧边栏输入或设置 Secrets）", icon="⚠️")
+            return None
+        
+        try:
+            # 创建 DeepSeek LLM 实例
+            llm = DeepSeek(
+                api_key=api_key,
+                api_base=base_url
+            )
+            return llm
+        except Exception as e:
+            st.toast(f"LLM 初始化失败: {str(e)}", icon="❌")
+            return None
 
     def configure_agent_with_data(self, dataframe, memory_limit):
+        """配置 Agent 并加载数据"""
         llm = self._setup_llm()
+        
         if llm is not None:
-            # 配置Agent参数
-            agent_config = Config(
-                llm=llm,
-                save_charts_path='exports/charts',
-                open_charts=False,
-                enable_cache=False,
-                verbose=True
-            )
-            self.llm_agent = Agent(
-                dfs=dataframe,
-                config=agent_config,
-                memory_size=memory_limit
-            )
-            st.session_state.llm_ready = True
+            try:
+                # 配置 Agent 参数
+                agent_config = Config(
+                    llm=llm,
+                    save_charts_path='exports/charts',
+                    open_charts=False,
+                    enable_cache=False,
+                    verbose=True
+                )
+                
+                # 创建 Agent
+                self.llm_agent = Agent(
+                    dfs=dataframe,
+                    config=agent_config,
+                    memory_size=memory_limit
+                )
+                
+                st.session_state.llm_ready = True
+                st.toast("✅ 语言模型初始化成功", icon="🎉")
+                
+            except Exception as e:
+                st.toast(f"Agent 配置失败: {str(e)}", icon="❌")
+                st.session_state.llm_ready = False
+        else:
+            st.session_state.llm_ready = False
 
     def submit_query(self, user_prompt):
+        """提交用户查询"""
         if self.llm_agent is None:
             st.toast("语言模型未准备好，请检查配置", icon="❌")
-            st.stop()
-        return self.llm_agent.chat(user_prompt)
+            return "请先上传数据文件并确保 API 密钥配置正确"
+        
+        try:
+            result = self.llm_agent.chat(user_prompt)
+            return result
+        except Exception as e:
+            error_msg = str(e)
+            # 处理 API 密钥错误
+            if "401" in error_msg or "AuthenticationError" in error_msg:
+                st.toast("API 密钥无效，请检查配置", icon="🔑")
+                return "API 密钥认证失败，请检查密钥是否正确"
+            elif "429" in error_msg:
+                st.toast("请求频率过高，请稍后重试", icon="⏰")
+                return "请求过于频繁，请稍后再试"
+            else:
+                st.toast(f"查询失败: {error_msg[:100]}", icon="❌")
+                return f"分析出错: {error_msg}"
 
     def clear_conversation(self):
-        self.llm_agent.start_new_conversation()
-        st.session_state.chat_history = []
+        """清除对话历史"""
+        if self.llm_agent is not None:
+            self.llm_agent.start_new_conversation()
+        if "chat_history" in st.session_state:
+            st.session_state.chat_history = []
