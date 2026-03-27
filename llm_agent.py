@@ -4,7 +4,7 @@ import uuid
 import streamlit as st
 from pandasai import Agent
 from pandasai.schemas.df_config import Config
-from pandasai.llm import DeepSeek
+from pandasai.llm.openai import OpenAI
 
 
 class LLMAgentHandler:
@@ -16,7 +16,7 @@ class LLMAgentHandler:
         self.agent_id = str(uuid.uuid4())
 
     def _setup_llm(self):
-        """设置 DeepSeek LLM"""
+        """设置 DeepSeek LLM（通过 OpenAI 兼容接口）"""
         # 优先从 session_state 获取（用户手动输入）
         api_key = st.session_state.get("api_key", "")
         base_url = st.session_state.get("model_base_url", "")
@@ -33,10 +33,11 @@ class LLMAgentHandler:
             return None
         
         try:
-            # 创建 DeepSeek LLM 实例
-            llm = DeepSeek(
-                api_key=api_key,
-                api_base=base_url
+            # 使用 OpenAI 类连接 DeepSeek（兼容 OpenAI API）
+            llm = OpenAI(
+                api_token=api_key,
+                api_base=base_url,
+                model="deepseek-chat"
             )
             return llm
         except Exception as e:
