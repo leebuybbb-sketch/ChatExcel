@@ -1,4 +1,19 @@
 # coding: utf-8
+import sys
+import io
+
+# 设置默认编码为 UTF-8
+if sys.version_info[0] == 3:
+    import importlib
+    importlib.reload(sys)
+else:
+    reload(sys)
+    sys.setdefaultencoding('utf-8')
+
+# 设置标准输出的编码
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+# coding: utf-8
 
 import os
 import io
