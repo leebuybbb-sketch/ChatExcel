@@ -27,9 +27,22 @@ class LLMAgentHandler:
         if not base_url:
             base_url = st.secrets.get("DEEPSEEK_API_BASE", "https://api.deepseek.com")
         
+        # 清理字符串，确保只包含 ASCII 字符
+        if api_key:
+            api_key = str(api_key).strip()
+            # 只保留 ASCII 字符（移除中文字符）
+            api_key = ''.join(c for c in api_key if ord(c) < 128)
+        
+        if base_url:
+            base_url = str(base_url).strip()
+            base_url = ''.join(c for c in base_url if ord(c) < 128)
+            # 确保 URL 格式正确
+            if not base_url.startswith('http'):
+                base_url = 'https://api.deepseek.com'
+        
         # 验证 API 密钥
-        if not api_key:
-            st.toast("请配置 API 密钥（在侧边栏输入或设置 Secrets）", icon="⚠️")
+        if not api_key or len(api_key) < 10:
+            st.toast("请配置有效的 API 密钥", icon="⚠️")
             return None
         
         try:
@@ -41,7 +54,7 @@ class LLMAgentHandler:
             )
             return llm
         except Exception as e:
-            st.toast(f"LLM 初始化失败: {str(e)}", icon="❌")
+            st.toast(f"LLM 初始化失败: {str(e)[:100]}", icon="❌")
             return None
 
     def configure_agent_with_data(self, dataframe, memory_limit):
@@ -70,7 +83,7 @@ class LLMAgentHandler:
                 st.toast("✅ 语言模型初始化成功", icon="🎉")
                 
             except Exception as e:
-                st.toast(f"Agent 配置失败: {str(e)}", icon="❌")
+                st.toast(f"Agent 配置失败: {str(e)[:100]}", icon="❌")
                 st.session_state.llm_ready = False
         else:
             st.session_state.llm_ready = False
@@ -78,7 +91,6 @@ class LLMAgentHandler:
     def submit_query(self, user_prompt):
         """提交用户查询"""
         if self.llm_agent is None:
-            st.toast("语言模型未准备好，请检查配置", icon="❌")
             return "请先上传数据文件并确保 API 密钥配置正确"
         
         try:
@@ -86,25 +98,20 @@ class LLMAgentHandler:
             return str(result) if result is not None else "没有返回结果"
             
         except UnicodeEncodeError as e:
-            st.toast("编码错误，请尝试使用英文提问", icon="⚠️")
-            return "编码错误，请尝试使用英文提问"
+            st.toast("编码错误，请使用英文提问", icon="⚠️")
+            return "编码错误，请使用英文提问（如：'How many rows?'）"
             
         except Exception as e:
             error_msg = str(e)
             # 处理 API 密钥错误
             if "401" in error_msg or "AuthenticationError" in error_msg:
-                st.toast("API 密钥无效，请检查配置", icon="🔑")
                 return "API 密钥认证失败，请检查密钥是否正确"
             elif "429" in error_msg:
-                st.toast("请求频率过高，请稍后重试", icon="⏰")
                 return "请求过于频繁，请稍后再试"
             else:
-                st.toast(f"查询失败: {error_msg[:100]}", icon="❌")
-                return f"分析出错: {error_msg}"
+                return f"分析出错: {error_msg[:200]}"
 
     def clear_conversation(self):
         """清除对话历史"""
         if self.llm_agent is not None:
             self.llm_agent.start_new_conversation()
-        if "chat_history" in st.session_state:
-            st.session_state.chat_history = []
