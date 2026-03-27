@@ -4,7 +4,7 @@ import uuid
 import streamlit as st
 from pandasai import Agent
 from pandasai.schemas.df_config import Config
-from pandasai.llm import DeepSeek  # 直接使用 DeepSeek 类
+from pandasai.llm import DeepSeek
 
 
 class LLMAgentHandler:
