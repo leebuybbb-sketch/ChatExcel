@@ -1,4 +1,36 @@
 # coding: utf-8
+import os
+import sys
+import io
+
+# 设置环境编码
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+os.environ['LANG'] = 'zh_CN.UTF-8'
+
+# 设置 stdout/stderr 编码
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+import uuid
+import logging
+from pathlib import Path
+from typing import Dict
+
+import pandas as pd
+import matplotlib
+import streamlit as st
+
+from pandasai import SmartDataframe
+from pandasai.helpers import Logger
+
+from llm_agent import LLMAgentHandler
+
+# 创建必要的目录
+os.makedirs('exports/charts', exist_ok=True)
+os.makedirs('.matplotlib', exist_ok=True)
+# coding: utf-8
 import sys
 import io
 
