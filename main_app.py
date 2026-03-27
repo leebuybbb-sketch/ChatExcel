@@ -16,6 +16,10 @@ from pandasai.helpers import Logger
 
 from llm_agent import LLMAgentHandler
 
+# 创建必要的目录
+os.makedirs('exports/charts', exist_ok=True)
+os.makedirs('.matplotlib', exist_ok=True)
+
 # 缓存LLM代理实例
 @st.cache_resource
 def get_llm_agent(agent_id: str) -> LLMAgentHandler:
@@ -27,6 +31,19 @@ st.set_page_config(
     layout="wide",
     page_icon="📊"
 )
+
+# ========== 从 Secrets 自动填充配置 ==========
+if "api_key" not in st.session_state or not st.session_state.api_key:
+    st.session_state.api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+if "model_base_url" not in st.session_state or not st.session_state.model_base_url:
+    st.session_state.model_base_url = st.secrets.get("DEEPSEEK_API_BASE", "https://api.deepseek.com")
+if "last_model_choice" not in st.session_state:
+    st.session_state.last_model_choice = "DeepSeek"
+if "last_memory_limit" not in st.session_state:
+    st.session_state.last_memory_limit = 10
+if "agent_identifier" not in st.session_state:
+    st.session_state.agent_identifier = str(uuid.uuid4())
+# ============================================
 
 # 自定义CSS样式 - 调整字体大小和整体布局
 st.markdown("""
@@ -105,7 +122,8 @@ st.markdown("""
 
 # 初始化日志和 matplotlib 配置
 logger = Logger()
-matplotlib.rc_file("./.matplotlib/.matplotlibrc")
+if os.path.exists("./.matplotlib/.matplotlibrc"):
+    matplotlib.rc_file("./.matplotlib/.matplotlibrc")
 
 # 顶部标题区域
 col_title, col_logo = st.columns([8, 1])
@@ -260,16 +278,16 @@ with sidebar:
     with st.expander("🤖 模型设置", expanded=True):
         model_choice = st.selectbox("选择语言模型", ["DeepSeek"])
 
-        # 初始化会话状态参数
-        if "api_key" not in st.session_state:
-            st.session_state.api_key = ""
-        if "model_base_url" not in st.session_state:
-            st.session_state.model_base_url = ""
-
         # 模型参数配置
         if model_choice == "DeepSeek":
+            # 显示密钥状态
+            if st.session_state.api_key:
+                st.info("✅ API 密钥已配置（来自 Secrets）")
+            else:
+                st.warning("⚠️ 请在 Secrets 中配置 DEEPSEEK_API_KEY")
+            
             api_key = st.text_input(
-                "API 密钥",
+                "API 密钥（可修改）",
                 st.session_state.api_key,
                 type="password",
                 placeholder="请输入API密钥"
@@ -310,15 +328,11 @@ with sidebar:
                 st.session_state.llm_ready = False
 
     # 模型选择变更处理
-    if "last_model_choice" not in st.session_state:
-        st.session_state.last_model_choice = None
     if model_choice != st.session_state.last_model_choice:
         st.session_state.last_model_choice = model_choice
         st.session_state.llm_ready = False
 
     # 记忆长度变更处理
-    if "last_memory_limit" not in st.session_state:
-        st.session_state.last_memory_limit = None
     if memory_limit != st.session_state.last_memory_limit:
         st.session_state.last_memory_limit = memory_limit
         st.session_state.llm_ready = False
@@ -331,7 +345,7 @@ with sidebar:
 
     if uploaded_file is None:
         st.session_state.file_uploaded = False
-        if st.session_state.llm_ready:
+        if st.session_state.llm_ready and "agent_identifier" in st.session_state:
             get_llm_agent(st.session_state.agent_identifier).clear_conversation()
         st.info("请上传数据文件开始分析")
     else:
