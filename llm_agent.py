@@ -83,7 +83,32 @@ class LLMAgentHandler:
         
         try:
             result = self.llm_agent.chat(user_prompt)
+            
+            # 处理编码问题
+            if isinstance(result, str):
+                # 确保返回的字符串是 UTF-8 编码
+                try:
+                    # 尝试编码为 ASCII，如果失败则说明有中文
+                    result.encode('ascii')
+                except UnicodeEncodeError:
+                    # 已经包含中文，直接返回
+                    pass
+                except Exception:
+                    pass
+            
             return result
+            
+        except UnicodeEncodeError as e:
+            # 专门的编码错误处理
+            st.toast("编码错误，正在重试...", icon="🔄")
+            try:
+                # 尝试重新获取结果
+                result = self.llm_agent.chat(user_prompt)
+                # 强制转换为字符串
+                return str(result)
+            except Exception as retry_error:
+                return f"处理中文内容时出错: {str(retry_error)}"
+                
         except Exception as e:
             error_msg = str(e)
             # 处理 API 密钥错误
@@ -93,6 +118,8 @@ class LLMAgentHandler:
             elif "429" in error_msg:
                 st.toast("请求频率过高，请稍后重试", icon="⏰")
                 return "请求过于频繁，请稍后再试"
+            elif "UnicodeEncodeError" in error_msg or "ascii" in error_msg:
+                return "编码错误，请尝试使用英文提问，或检查数据中的特殊字符"
             else:
                 st.toast(f"查询失败: {error_msg[:100]}", icon="❌")
                 return f"分析出错: {error_msg}"
